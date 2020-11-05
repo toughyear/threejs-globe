@@ -36,8 +36,19 @@
     <p class="landing-para" style="font-weight: 200;" >DESIGNING AND DEVELOPING AN <span style="font-weight: 400;">INTERACTIVE GLOBE</span></p>
     <a href="https://google.com" style="margin-bottom: 2rem;">Read the <span style="font-weight: 600; text-decoration: underline;">project report</span> <img class="icons" src="/img/link.svg" alt="" ></a>
     <a href="https://google.com">See the  Source code on <span style="font-weight: 600; text-decoration: underline;">GitHub</span> <img class="icons" src="/img/link.svg" alt=""></a>
-  </div>
-  <div id="globe"> 
+    <p style="font-weight: 200;"><span style="font-weight: 600;">INSTRUCTIONS:</span> 
+      <br>
+      1. By default, The globe moves on its own.
+      <br>
+      2. However you can start the HCI based interaction with the globe by clicking on it once.
+      <br>
+      3. After that, you can use your mouse to navigate around the globe as you would do with a real globe.
+      <br>
+      4. Use scroll to zoom in or out of the globe.
+      <br>
+      5. Use control panel on top right for finer control over the globe.
+    </p>  </div>
+  <div id="globe" ondblclick="stabalizeGlobe()" onclick="stabalizeGlobe()" ondragstart="stabalizeGlobe()">  
     <div id="gui_container"></div>
 
 
@@ -52,14 +63,15 @@
 
    <script>
  // Scene, Camera, Renderer
+ //define definitions
 let renderer = new THREE.WebGLRenderer();
 let scene = new THREE.Scene();
 let aspect = window.innerWidth / window.innerHeight;
 let camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1500);
 let cameraRotation = 0;
-let cameraRotationSpeed = 0.001;
+let cameraRotationSpeed = 0.005;
 let cameraAutoRotation = true;
-let orbitControls = new THREE.OrbitControls(camera);
+let orbitControls = new THREE.OrbitControls(camera, document.getElementById("globe"));
 
 // Lights
 let spotLight = new THREE.SpotLight(0xffffff, 1, 0, 10, 2);
@@ -68,6 +80,7 @@ let spotLight = new THREE.SpotLight(0xffffff, 1, 0, 10, 2);
 let textureLoader = new THREE.TextureLoader();
 
 // Planet Proto
+//create a planet prototype that will be used to make layers of the planet for say atmosphere
 let planetProto = {
   sphere: function(size) {
     let sphere = new THREE.SphereGeometry(size, 32, 32);
@@ -229,65 +242,7 @@ let earth = createPlanet({
   },
 });
 
-// Marker Proto
-let markerProto = {
-  latLongToVector3: function latLongToVector3(latitude, longitude, radius, height) {
-    var phi = (latitude)*Math.PI/180;
-    var theta = (longitude-180)*Math.PI/180;
-
-    var x = -(radius+height) * Math.cos(phi) * Math.cos(theta);
-    var y = (radius+height) * Math.sin(phi);
-    var z = (radius+height) * Math.cos(phi) * Math.sin(theta);
-
-    return new THREE.Vector3(x,y,z);
-  },
-  marker: function marker(size, color, vector3Position) {
-    let markerGeometry = new THREE.SphereGeometry(size);
-    let markerMaterial = new THREE.MeshLambertMaterial({
-      color: color
-    });
-    let markerMesh = new THREE.Mesh(markerGeometry, markerMaterial);
-    markerMesh.position.copy(vector3Position);
-    
-    return markerMesh;
-  }
-}
-
-// Place Marker
-let placeMarker = function(object, options) {
-  let position = markerProto.latLongToVector3(options.latitude, options.longitude, options.radius, options.height);
-  let marker = markerProto.marker(options.size, options.color, position);
-  object.add(marker);
-}
-
-// Place Marker At Address
-let placeMarkerAtAddress = function(address, color) {
-  let encodedLocation = address.replace(/\s/g, '+');
-  let httpRequest = new XMLHttpRequest();
-  
-  httpRequest.open('GET', 'https://maps.googleapis.com/maps/api/geocode/json?address=' + encodedLocation);
-  httpRequest.send(null);
-  httpRequest.onreadystatechange = function() {
-    if (httpRequest.readyState == 4 && httpRequest.status == 200) {
-      let result = JSON.parse(httpRequest.responseText);
-      
-      if (result.results.length > 0) {
-        let latitude = result.results[0].geometry.location.lat;
-        let longitude = result.results[0].geometry.location.lng;
-
-        placeMarker(earth.getObjectByName('surface'),{
-          latitude: latitude,
-          longitude: longitude,
-          radius: 0.5,
-          height: 0,
-          size: 0.01,
-          color: color,
-        });
-      }
-    }
-  };
-}
-
+ 
 // Galaxy
 let galaxyGeometry = new THREE.SphereGeometry(100, 32, 32);
 let galaxyMaterial = new THREE.MeshBasicMaterial({
@@ -354,7 +309,6 @@ gui.domElement.id = 'gui';
 gui_container.appendChild(gui.domElement);
 var guiCamera = gui.addFolder('Camera');
 var guiSurface = gui.addFolder('Surface');
-var guiMarkers = guiSurface.addFolder('Markers');
 var guiAtmosphere = gui.addFolder('Atmosphere');
 var guiAtmosphericGlow = guiAtmosphere.addFolder('Glow');
 
@@ -370,13 +324,6 @@ var surfaceControls = new function() {
   this.shininess = 10;
 }
 
-var markersControls = new function() {
-  this.address = '';
-  this.color = 0xff0000;
-  this.placeMarker= function() {
-    placeMarkerAtAddress(this.address, this.color);
-  }
-}
 
 var atmosphereControls = new function() {
   this.opacity = 0.8;
@@ -397,6 +344,20 @@ guiCamera.add(cameraControls, 'orbitControls').onChange(function(value) {
   orbitControls.enabled = value;
 });
 
+//flag
+let firstTime = true;
+
+function stabalizeGlobe() {
+  
+// turn orbitcontrol to true and autoRotation to false
+if (firstTime) {
+  console.log("executed")
+  cameraAutoRotation = false;
+  orbitControls.enabled = true;
+  firstTime = false
+}
+}
+
 guiSurface.add(surfaceControls, 'rotation', 0, 6).onChange(function(value) {
   earth.getObjectByName('surface').rotation.y = value;
 });
@@ -405,11 +366,7 @@ guiSurface.add(surfaceControls, 'bumpScale', 0, 1).step(0.01).onChange(function(
 });
 guiSurface.add(surfaceControls, 'shininess', 0, 30).onChange(function(value) {
   earth.getObjectByName('surface').material.shininess = value;
-});
-
-guiMarkers.add(markersControls, 'address');
-guiMarkers.addColor(markersControls, 'color');
-guiMarkers.add(markersControls, 'placeMarker');
+}); 
 
 guiAtmosphere.add(atmosphereControls, 'opacity', 0, 1).onChange(function(value) {
   earth.getObjectByName('atmosphere').material.opacity = value;
